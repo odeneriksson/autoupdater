@@ -1,0 +1,38 @@
+#!/bin/bash
+
+# Oden Eriksson - Tue 27 Jun 2023
+
+# function to temporary disable automatic reboot (will not survive a reboot)
+LOCKFILE="/var/lock/autoupdater"
+if [[ -f $LOCKFILE ]]; then
+    log_msg="Error $0 $LOCKFILE exists, skipping"
+    logger "$log_msg"
+    exit 1
+fi
+
+if [[ ! -x /usr/bin/needs-restarting ]]; then
+    log_msg="Error $0 /usr/bin/needs-restarting is missing"
+    logger "$log_msg"
+    exit 1
+fi
+
+# source the config
+if [ -f /etc/autoupdater.conf ]; then
+    . /etc/autoupdater.conf
+    export MINWAIT="${MINWAIT:-10}"
+    export MAXWAIT="${MAXWAIT:-90}"
+else
+    echo "ERROR: /etc/autoupdater.conf is missing"
+    exit 1
+fi
+
+SLEEP_TIME=$((MINWAIT+RANDOM % (MAXWAIT-MINWAIT)))
+USERS=$(who | awk '{print $1}' | sort -u | wc -l)
+
+/usr/bin/needs-restarting -r >/dev/null
+RETVAL="$?"
+
+if [[ "$RETVAL" -gt "0" ]] &&  [[ "$USERS" -lt "2" ]]; then
+     sleep $SLEEP_TIME
+     shutdown -r
+fi
